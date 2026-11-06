@@ -1,0 +1,4 @@
+bleak>=0.21
+pywinauto>=0.6.6
+pyautogui>=0.9.54
+pywin32>=306; sys_platform == "win32"
