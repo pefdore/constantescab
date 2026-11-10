@@ -91,7 +91,7 @@ class FloatingWindowCompact:
 
         self.root = tk.Tk()
         self.root.title("ConstantesCab")
-        self.root.geometry("640x28")
+        self.root.geometry("200x28")
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.98)
@@ -104,10 +104,10 @@ class FloatingWindowCompact:
                 self.root.geometry(f"+{x}+{y}")
             else:
                 screen_width = self.root.winfo_screenwidth()
-                self.root.geometry(f"+{screen_width - 600}+8")
+                self.root.geometry(f"+{screen_width - 640}+8")
         else:
             screen_width = self.root.winfo_screenwidth()
-            self.root.geometry(f"+{screen_width - 600}+8")
+            self.root.geometry(f"+{screen_width - 640}+8")
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -115,6 +115,7 @@ class FloatingWindowCompact:
 
         self._create_ui()
         self._setup_drag()
+        self._resize_to_content()
         self._start_update_loop()
         self._doctolib_thread.start()
         self._start_doctolib_check()
@@ -200,33 +201,65 @@ class FloatingWindowCompact:
             self.visible = True
             self.root.deiconify()
 
+    BAR_HEIGHT = 28
+    BAR_RADIUS = 14
+
+    def _draw_rounded_bg(self, width: int) -> None:
+        """Redessine le fond arrondi pour la largeur demandee."""
+        height = self.BAR_HEIGHT
+        radius = self.BAR_RADIUS
+        canvas = self.rounded_canvas
+        canvas.delete('all')
+        canvas.config(width=width, height=height)
+
+        canvas.create_rectangle(radius, 0, width - radius, height,
+                                 fill=self.DOCTO_BLUE, outline='')
+        canvas.create_arc(0, 0, radius * 2, height, start=90, extent=180,
+                          fill=self.DOCTO_BLUE, outline='')
+        canvas.create_arc(width - radius * 2, 0, width, height, start=270, extent=180,
+                          fill=self.DOCTO_BLUE, outline='')
+
+        canvas.create_line(radius, 0, width - radius, 0, fill=self.DOCTO_BORDER, width=2)
+        canvas.create_line(radius, height, width - radius, height, fill=self.DOCTO_BORDER, width=2)
+        canvas.create_arc(0, 0, radius * 2, height, start=90, extent=180,
+                          fill='', outline=self.DOCTO_BORDER, width=2, style='arc')
+        canvas.create_arc(width - radius * 2, 0, width, height, start=270, extent=180,
+                          fill='', outline=self.DOCTO_BORDER, width=2, style='arc')
+
+        self.content_frame = tk.Frame(canvas, bg=self.DOCTO_BLUE)
+        self.content_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+    def _resize_to_content(self) -> None:
+        """Ajuste la largeur de la fenetre au contenu reel (polices variables selon le PC)."""
+        try:
+            self.content_frame.update_idletasks()
+            content_width = self.content_frame.winfo_reqwidth()
+            total = content_width + 2 * self.BAR_RADIUS + 8
+            if total < 200:
+                total = 200
+
+            if total != getattr(self, '_bar_width', None):
+                self._bar_width = total
+                self._draw_rounded_bg(total)
+                self.content_frame.update_idletasks()
+                self.content_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+                x = self.root.winfo_x()
+                y = self.root.winfo_y()
+                self.root.geometry(f"{total}x{self.BAR_HEIGHT}+{x}+{y}")
+        except Exception as e:
+            print(f"Erreur redimensionnement: {e}")
+
     def _create_ui(self) -> None:
         main_frame = tk.Frame(self.root, bg=self.root['bg'])
         main_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
 
-        height = 28
-        radius = 14
-        width = 620
-        self.rounded_canvas = tk.Canvas(main_frame, width=width, height=height,
+        self.rounded_canvas = tk.Canvas(main_frame, width=200, height=self.BAR_HEIGHT,
                                         bg=self.root['bg'], highlightthickness=0)
         self.rounded_canvas.pack(fill=tk.BOTH, expand=True)
 
-        self.rounded_canvas.create_rectangle(radius, 0, width - radius, height,
-                                             fill=self.DOCTO_BLUE, outline='')
-        self.rounded_canvas.create_arc(0, 0, radius * 2, height, start=90, extent=180,
-                                       fill=self.DOCTO_BLUE, outline='')
-        self.rounded_canvas.create_arc(width - radius * 2, 0, width, height, start=270, extent=180,
-                                       fill=self.DOCTO_BLUE, outline='')
-
-        self.rounded_canvas.create_line(radius, 0, width - radius, 0, fill=self.DOCTO_BORDER, width=2)
-        self.rounded_canvas.create_line(radius, height, width - radius, height, fill=self.DOCTO_BORDER, width=2)
-        self.rounded_canvas.create_arc(0, 0, radius * 2, height, start=90, extent=180,
-                                       fill='', outline=self.DOCTO_BORDER, width=2, style='arc')
-        self.rounded_canvas.create_arc(width - radius * 2, 0, width, height, start=270, extent=180,
-                                       fill='', outline=self.DOCTO_BORDER, width=2, style='arc')
-
-        content_frame = tk.Frame(self.rounded_canvas, bg=self.DOCTO_BLUE)
-        content_frame.place(relx=0.5, rely=0.5, anchor='center')
+        self._draw_rounded_bg(200)
+        content_frame = self.content_frame
 
         self.logo_label = tk.Label(
             content_frame, text="\U0001FA7A", font=('Segoe UI', 10),
@@ -396,6 +429,8 @@ class FloatingWindowCompact:
             return ""
 
     def _update_display(self) -> None:
+        self._resize_to_content()
+
         bp = self._read_status('bp2') or {}
         scale = self._read_status('scale') or {}
         ft = self._read_status('ft95') or {}
